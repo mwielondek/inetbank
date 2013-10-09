@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"time"
 )
 
 const (
@@ -37,20 +38,27 @@ func main() {
 			}()
 
 			fmt.Fprintln(c, "Welcome to Bank!")
-			var request []byte
-			for {
-				if n, err := fmt.Fscan(c, &request); err == nil && n > 0 {
-					if answer, err := processRequest(request); err != nil {
-						log.Printf("Bad request (%b)\n", request)
-					} else {
-						fmt.Fprint(c, answer)
-					}
-				}
+			c.SetDeadline(time.Now().Add(5*time.Second))
+			request := make([]byte, 10)
+			_, err := c.Read(request)
+			if nerr, ok := err.(net.Error); ok && nerr.Timeout() {
+				log.Printf("Connection from %s timed out.\n", conn.LocalAddr())
+				return // exit goroutine and close conn
 			}
+			// for {
+			// 	if n, err := fmt.Fscan(c, &request); err == nil && n > 0 {
+			// 		if answer, err := processRequest(request); err != nil {
+			// 			log.Printf("Bad request (%b)\n", request)
+			// 		} else {
+			// 			fmt.Fprint(c, answer)
+			// 		}
+			// 	}
+			// }
 		}(conn)
 	}
 }
 
 func processRequest(req []byte) (ans []byte, err error) {
+	// TODO
 	return
 }
