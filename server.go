@@ -11,7 +11,16 @@ import (
 const (
 	port = "1337"
 	timeout = 30 // in seconds
+
+	// Control bits
+	Failure = 0
+	Success = 1
+	Request = 2
 )
+
+type ClientConn struct {
+	conn net.Conn
+}
 
 func main() {
 	// start the server
@@ -32,8 +41,12 @@ func main() {
 		}
 		log.Printf("Connection from %s\n", conn.LocalAddr())
 
+		clc := new(ClientConn)
+		clc.conn = conn
+
 		// handle conn in a new goroutine
-		go func(c net.Conn) {
+		go func(cl *ClientConn) {
+			c := cl.conn
 			defer c.Close()
 
 			// create request buffer, max 10 bytes
@@ -57,16 +70,17 @@ func main() {
 
 				// process request
 				log.Printf("Request from %s: %s\n", conn.LocalAddr(), string(request))
-				perr := processRequest(c, request)
+				perr := cl.processRequest(request)
 				if perr != nil {
 					fmt.Println(perr)
 				}
 			}
-		}(conn)
+		}(clc)
 	}
 }
 
-func processRequest(c net.Conn, req []byte) error {
+func (c *ClientConn) processRequest(req []byte) error {
+	resp := make([]byte, 10)
 	// trim trailing 0's
 	req = bytes.TrimRight(req, string([]byte{0}))
 	// conv to string
@@ -76,9 +90,22 @@ func processRequest(c net.Conn, req []byte) error {
 
 	// Get welcome message
 	case "get_wmsg":
-		c.Write([]byte("Knock knock! It's us!"))
+		// Get client language
+		resp = []byte("get_lang")
+		resp = bytes.Join([][]byte{{Request},resp}, []byte{})
+		c.conn.Write(resp)
+		// clear resp between wr/rd
+		// and set limit to 80 bytes
+		resp = make([]byte, 80)
+		c.conn.Read(resp)
+		lang := string(resp)
+
+		welcome_message := "Temp welcome message in " + lang
+		resp = []byte(welcome_message)
+		resp = bytes.Join([][]byte{{Success},resp}, []byte{})
+		c.conn.Write(resp)
 	default:
-		return fmt.Errorf("Request fallthrough (bad req: %s)", sreq)
+		return fmt.Errorf("Request fallthrough (bad request: %s)", sreq)
 	}
 	return nil
 }
