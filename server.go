@@ -38,9 +38,14 @@ func main() {
 			}()
 
 			fmt.Fprintln(c, "Welcome to Bank!")
+			// set idle timeout
 			c.SetDeadline(time.Now().Add(5*time.Second))
+
+			// create request buffer
 			request := make([]byte, 10)
 			_, err := c.Read(request)
+
+			// check for Timeout (err.(net.Error) => type assertion)
 			if nerr, ok := err.(net.Error); ok && nerr.Timeout() {
 				log.Printf("Connection from %s timed out.\n", conn.LocalAddr())
 				return // exit goroutine and close conn
