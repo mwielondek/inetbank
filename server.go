@@ -5,10 +5,12 @@ import (
 	"log"
 	"net"
 	"time"
+	"bytes"
 )
 
 const (
 	port = "1337"
+	timeout = 30 // in seconds
 )
 
 func main() {
@@ -32,38 +34,51 @@ func main() {
 
 		// handle conn in a new goroutine
 		go func(c net.Conn) {
-			defer func() {
-				c.Close()
-				log.Printf("Connection from %s closed.\n", conn.LocalAddr())
-			}()
+			defer c.Close()
 
-			fmt.Fprintln(c, "Welcome to Bank!")
-			// set idle timeout
-			c.SetDeadline(time.Now().Add(5*time.Second))
-
-			// create request buffer
+			// create request buffer, max 10 bytes
 			request := make([]byte, 10)
-			_, err := c.Read(request)
+			for {
+				// set idle timeout
+				c.SetDeadline(time.Now().Add(timeout*time.Second))
 
-			// check for Timeout (err.(net.Error) => type assertion)
-			if nerr, ok := err.(net.Error); ok && nerr.Timeout() {
-				log.Printf("Connection from %s timed out.\n", conn.LocalAddr())
-				return // exit goroutine and close conn
+				// read
+				_, err := c.Read(request)
+
+				if err != nil {
+					// check for Timeout (err.(net.Error) => type assertion)
+					if nerr, ok := err.(net.Error); ok && nerr.Timeout() {
+						log.Printf("Connection from %s timed out.\n", conn.LocalAddr())
+					} else {
+						log.Printf("Connection from %s closed remotely.\n", conn.LocalAddr())
+					}
+					return // exit goroutine and close conn
+				}
+
+				// process request
+				log.Printf("Request from %s: %s\n", conn.LocalAddr(), string(request))
+				perr := processRequest(c, request)
+				if perr != nil {
+					fmt.Println(perr)
+				}
 			}
-			// for {
-			// 	if n, err := fmt.Fscan(c, &request); err == nil && n > 0 {
-			// 		if answer, err := processRequest(request); err != nil {
-			// 			log.Printf("Bad request (%b)\n", request)
-			// 		} else {
-			// 			fmt.Fprint(c, answer)
-			// 		}
-			// 	}
-			// }
 		}(conn)
 	}
 }
 
-func processRequest(req []byte) (ans []byte, err error) {
-	// TODO
-	return
+func processRequest(c net.Conn, req []byte) error {
+	// trim trailing 0's
+	req = bytes.TrimRight(req, string([]byte{0}))
+	// conv to string
+	sreq := string(req)
+	
+	switch sreq {
+
+	// Get welcome message
+	case "get_wmsg":
+		c.Write([]byte("Knock knock! It's us!"))
+	default:
+		return fmt.Errorf("Request fallthrough (bad req: %s)", sreq)
+	}
+	return nil
 }

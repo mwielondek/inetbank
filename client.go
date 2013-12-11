@@ -92,7 +92,13 @@ func (o Options) validateInput(i int) bool {
 func (c *Client) run() {
 
 	// Echo incoming msg from server
-	// go io.Copy(os.Stdin, c.conn)
+	// go io.Copy(os.Stdin, c.conn) // dbg
+
+	// Request welcome message
+	wmsg := make([]byte, 100)
+	c.conn.Write([]byte("get_wmsg"))
+	c.conn.Read(wmsg)
+	fmt.Println(string(wmsg))
 
 	// Print menu
 	menu, err := getMenu(lang)
