@@ -5,13 +5,18 @@ import(
 	"fmt"
 	"bufio"
 	"os"
+	"strconv"
 )
 
 var (
 	lang = "en" //default lang
 )
 
-type userInput int
+type Options []int
+type Choice struct {
+	options Options
+	userInput int
+}
 
 type Client struct {
 	conn net.Conn
@@ -35,40 +40,32 @@ func (c *Client) create() {
 	c.reader = reader
 }
 
-func (c *Client) run() {
-
-	// Echo incoming msg from server
-	// go io.Copy(os.Stdin, c.conn)
-
-	// Print menu
-	menu, err := getMenu(lang)
-	if err != nil { 
-		fmt.Printf("Could not load menu. %s\n", err)
-		os.Exit(1)
+// Gets input from user
+func (c *Choice) getInput(prompt string) {
+	var s string
+	var d int
+	var err error
+	for {
+		fmt.Print(prompt)
+		// scan for string so that we read the entire line
+		// otherwise trailing chars wont get flushed
+		fmt.Scanf("%s", &s)
+		
+		// convert to int and then to userInput
+		d, err = strconv.Atoi(s)
+		if err == nil && c.options.validateInput(d) {
+			break
+		}
+		fmt.Println("Invalid input")
 	}
-	fmt.Print(menu)
-
-	// Prompt user for input
-	var choice userInput
-	choice.getInput("Choose: >> ")
-	// fmt.Printf("C: %d\n", choice) // dbg
+	c.userInput=d
 }
 
-func (c *userInput) getInput(prompt string) {
-	fmt.Print(prompt)
-	_, err := fmt.Scanf("%d", c)
-	if err != nil {
-		fmt.Println(err)
-	}
-}
-
+// Returns the menu prompt
 func getMenu(lang string) (string, error) {
 	menu, err := os.Open("files/"+lang+"/menu.txt")
-	scanner := bufio.NewScanner(menu)
-	var o string
-	for scanner.Scan() {
-		o += scanner.Text() + "\n"
-	}
+	reader := bufio.NewReader(menu)
+	o, _ := reader.ReadString('\n')
 
 	return o, err
 }
@@ -80,4 +77,33 @@ func (c *Client) connect() (conn net.Conn){
 		os.Exit(1)
 	}
 	return conn
+}
+
+// Checks if given input is in the options list
+func (o Options) validateInput(i int) bool {
+	for _, x := range o {
+		if x == i {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *Client) run() {
+
+	// Echo incoming msg from server
+	// go io.Copy(os.Stdin, c.conn)
+
+	// Print menu
+	menu, err := getMenu(lang)
+	if err != nil { 
+		fmt.Printf("Could not load menu. %s\n", err)
+		os.Exit(1)
+	}
+	fmt.Println(menu)
+
+	// Prompt user for input
+	choice := Choice{options: []int{1,2,3,4}}
+	choice.getInput("Choose: >> ")
+	fmt.Printf("C: %d\n", choice.userInput) // dbg
 }
