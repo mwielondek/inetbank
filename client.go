@@ -41,7 +41,7 @@ func (c *Client) create() {
 }
 
 // Gets input from user
-func (c *Choice) getInput(prompt string) {
+func (c *Choice) getInput(cl *Client, prompt string) {
 	var s string
 	var d int
 	var err error
@@ -49,10 +49,10 @@ func (c *Choice) getInput(prompt string) {
 		fmt.Print(prompt)
 		// scan for string so that we read the entire line
 		// otherwise trailing chars wont get flushed
-		fmt.Scanf("%s", &s)
+		s, _ = cl.reader.ReadString('\n')
 		
-		// convert to int and then to userInput
-		d, err = strconv.Atoi(s)
+		// convert to int and remove trailing newline
+		d, err = strconv.Atoi(s[:len(s)-1])
 		if err == nil && c.options.validateInput(d) {
 			break
 		}
@@ -110,6 +110,6 @@ func (c *Client) run() {
 
 	// Prompt user for input
 	choice := Choice{options: []int{1,2,3,4}}
-	choice.getInput("Choose: >> ")
+	choice.getInput(c, "Choose: >> ")
 	fmt.Printf("C: %d\n", choice.userInput) // dbg
 }
