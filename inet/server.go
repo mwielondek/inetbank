@@ -6,6 +6,9 @@ import (
 	"net"
 	"time"
 	"bytes"
+	"os"
+	"bufio"
+	. "./tools"
 )
 
 const (
@@ -73,6 +76,7 @@ func main() {
 				perr := cl.processRequest(request)
 				if perr != nil {
 					fmt.Println(perr)
+					c.Write(CreateResponse("Error processing request: "+perr.Error(), Failure))
 				}
 			}
 		}(clc)
@@ -81,26 +85,29 @@ func main() {
 
 func (c *ClientConn) processRequest(req []byte) error {
 	resp := make([]byte, 10)
-	// trim trailing 0's
-	req = bytes.TrimRight(req, string([]byte{0}))
-	// conv to string
-	sreq := string(req)
+	
+	sreq := BytesToString(req)
 	
 	switch sreq {
 
 	// Get welcome message
 	case "get_wmsg":
 		// Get client language
-		resp = []byte("get_lang")
-		resp = bytes.Join([][]byte{{Request},resp}, []byte{})
+		resp = CreateResponse("get_lang", Request)
 		c.conn.Write(resp)
 		// clear resp between wr/rd
 		// and set limit to 80 bytes
 		resp = make([]byte, 80)
 		c.conn.Read(resp)
-		lang := string(resp)
+		lang := BytesToString(resp)
 
-		welcome_message := "Temp welcome message in " + lang
+		// Load welcome message in given language
+		message, err := os.Open("files/"+lang+"/welcome_message.txt")
+		if err != nil {
+			return fmt.Errorf("Could not load welcome message: %s", err)
+		}
+		reader := bufio.NewReader(message)
+		welcome_message, _ := reader.ReadString('\n')
 		resp = []byte(welcome_message)
 		resp = bytes.Join([][]byte{{Success},resp}, []byte{})
 		c.conn.Write(resp)

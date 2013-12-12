@@ -6,7 +6,8 @@ import(
 	"bufio"
 	"os"
 	"strconv"
-	"bytes"
+	"strings"
+	. "./tools"
 )
 
 const (
@@ -14,6 +15,8 @@ const (
 	Failure = 0
 	Success = 1
 	Request = 2
+
+	available_langs = "en,sv"
 )
 
 var (
@@ -107,11 +110,11 @@ func (c *Client) processResponse(res []byte) (string, error) {
 	// 2: request
 	if res[0] == Failure {
 		// return error with rest of response
-		return "", fmt.Errorf("Error: %s", string(res[1:]))
+		return "", fmt.Errorf("Failed: %s", string(res[1:]))
 	}
 	if res[0] == Request {
-		req := bytes.TrimRight(res[1:], string([]byte{0}))
-		switch string(req) {
+		req := BytesToString(res[1:])
+		switch req {
 		case "get_lang":
 			c.conn.Write([]byte(lang))
 			return "", nil
@@ -127,18 +130,23 @@ func (c *Client) processResponse(res []byte) (string, error) {
 	return "",fmt.Errorf("Bad response: %s", string(res))
 }
 
+func setLanguage(lang_index int) {
+	lang = strings.Split(available_langs, ",")[lang_index]
+}
+
 func (c *Client) run() {
 	// Echo incoming msg from server
 	// go io.Copy(os.Stdin, c.conn) // dbg
 
 	// Ask to choose language
-	choice_lang := Choice{options: []int{1}}
+	choice_lang := Choice{options: []int{1, 2}}
 	fmt.Printf("Choose client language:\n%s\n", "(1) English (2) Swedish")
 	choice_lang.getInput(c, "Choose: >> ")
+	setLanguage(choice_lang.userInput-1)
 
 	// Request welcome message, (max 80 bytes)
-	resp := make([]byte, 80)
-	c.conn.Write([]byte("get_wmsg2"))
+	resp := make([]byte, 1000)
+	c.conn.Write([]byte("get_wmsg"))
 	var wmsg_str string
 	var err error
 	for wmsg_str == "" {
@@ -146,6 +154,7 @@ func (c *Client) run() {
 		wmsg_str, err = c.processResponse(resp)
 		if err != nil {
 			fmt.Println(err)
+			break
 		}
 	}
 	fmt.Println(wmsg_str)
