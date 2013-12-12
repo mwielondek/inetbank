@@ -33,11 +33,27 @@ func main() {
 	c.conn.Close()
 }
 
+// ================== MENU OPTIONS ==================
+
+// placeholder function
+func void() {}
+
+func exit() {
+	os.Exit(0)
+}
+
+func balance() {}
+
+func withdraw() {}
+
+func deposit() {}
+
+
 // ===================== CHOICE =====================
-type Options []int
+type MenuFunc func()
 type Choice struct {
-	options Options
 	userInput int
+	funcs []MenuFunc
 }
 
 // Gets input from user
@@ -53,7 +69,7 @@ func (c *Choice) getInput(cl *Client, prompt string) {
 		
 		// convert to int and remove trailing newline
 		d, err = strconv.Atoi(s[:len(s)-1])
-		if err == nil && c.options.validateInput(d) {
+		if err == nil && c.validateInput(d) {
 			break
 		}
 		fmt.Println("Invalid input")
@@ -61,14 +77,14 @@ func (c *Choice) getInput(cl *Client, prompt string) {
 	c.userInput=d
 }
 
-// Checks if given input is in the options list
-func (o Options) validateInput(i int) bool {
-	for _, x := range o {
-		if x == i {
-			return true
-		}
-	}
-	return false
+// Checks if given input is within range
+func (c *Choice) validateInput(i int) bool {
+	return i >= 1 && i <= len(c.funcs)
+}
+
+// executes function with index userInput-1 from funcs-array
+func (c *Choice) exec() {
+	c.funcs[c.userInput-1]()
 }
 
 // ================== TRANSLATOR ==================
@@ -115,15 +131,11 @@ func (c *Client) getMenu() (string, error) {
 // ==================== CLIENT =====================
 type Client struct {
 	conn net.Conn
-	//buff []byte
 	reader *bufio.Reader
 	lang *Translator
 }
 
 func (c *Client) create() {
-	// setting up client
-	//buff := make([]byte, 1000)
-	//c.buff = buff
 	c.conn = c.connect()
 	reader := bufio.NewReader(os.Stdin)
 	c.reader = reader
@@ -140,8 +152,6 @@ func (c *Client) connect() (conn net.Conn){
 
 // Process response and return the response string/error
 func (c *Client) processResponse(res []byte) (string, error) {
-	// fmt.Println("Received: ", res)
-
 	// First bit is a control bit that indicates
 	// 0: failure
 	// 1: success
@@ -182,11 +192,9 @@ func (c *Client) setLanguage(lang_index int) {
 }
 
 func (c *Client) run() {
-	// Echo incoming msg from server
-	// go io.Copy(os.Stdin, c.conn) // dbg
 
 	// Ask to choose language
-	choice_lang := Choice{options: []int{1, 2}}
+	choice_lang := Choice{funcs: []MenuFunc{void, void}}
 	fmt.Printf("Choose client language:\n%s\n", "(1) English (2) Swedish")
 	choice_lang.getInput(c, prompt)
 	c.setLanguage(choice_lang.userInput-1)
@@ -208,15 +216,17 @@ func (c *Client) run() {
 
 
 	// Print menu
+	menufuncs := []MenuFunc{balance, withdraw, deposit, exit}
+	choice := Choice{funcs: menufuncs}
 	menu, err := c.getMenu()
 	if err != nil { 
 		fmt.Printf("Could not load menu. %s\n", err)
 		os.Exit(1)
 	}
-	fmt.Println(menu)
-
-	// Prompt user for input
-	choice := Choice{options: []int{1,2,3,4}}
-	choice.getInput(c, prompt)
-	fmt.Printf("C: %d\n", choice.userInput) // dbg
+	for {
+		fmt.Println(menu)
+		// Prompt user for input
+		choice.getInput(c, prompt)
+		choice.exec()
+	}
 }
