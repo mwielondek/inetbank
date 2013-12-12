@@ -16,11 +16,14 @@ const (
 	Success = 1
 	Request = 2
 
+	prompt_suffix = " >> "
+
 	available_langs = "en,sv"
 )
 
 var (
 	lang = "en" //default lang
+	prompt = "Choose"+prompt_suffix // default prompt
 )
 
 type Options []int
@@ -31,8 +34,9 @@ type Choice struct {
 
 type Client struct {
 	conn net.Conn
-	buff []byte
+	//buff []byte
 	reader *bufio.Reader
+	lang *Translator
 }
 
 func main() {
@@ -44,8 +48,8 @@ func main() {
 
 func (c *Client) create() {
 	// setting up client
-	buff := make([]byte, 1000)
-	c.buff = buff
+	//buff := make([]byte, 1000)
+	//c.buff = buff
 	c.conn = c.connect()
 	reader := bufio.NewReader(os.Stdin)
 	c.reader = reader
@@ -75,6 +79,7 @@ func (c *Choice) getInput(cl *Client, prompt string) {
 // Returns the menu prompt
 func getMenu(lang string) (string, error) {
 	menu, err := os.Open("files/"+lang+"/menu.txt")
+	defer menu.Close()
 	reader := bufio.NewReader(menu)
 	o, _ := reader.ReadString('\n')
 
@@ -130,8 +135,47 @@ func (c *Client) processResponse(res []byte) (string, error) {
 	return "",fmt.Errorf("Bad response: %s", string(res))
 }
 
-func setLanguage(lang_index int) {
+func (c *Client) setLanguage(lang_index int) {
 	lang = strings.Split(available_langs, ",")[lang_index]
+	// set translator
+	var err error
+	c.lang, err = createTranslator(lang)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	// set prompt
+	prompt = Capitalize(c.lang.translate("choose")) + prompt_suffix
+}
+
+// give enum name and lang, return translation
+func (t *Translator) translate(name string) string {
+	return t.dict[name]
+}
+
+type Translator struct {
+	lang string
+	dict map[string]string
+}
+
+// loads the locale file for translation
+func createTranslator(lang string) (*Translator, error) {
+	locale, err := os.Open("files/"+lang+"/locale.txt")
+	defer locale.Close()
+	if err != nil {
+		return nil, err
+	}
+	dict := make(map[string]string)
+	sc := bufio.NewScanner(locale)
+	for sc.Scan() {
+		word := strings.Split(sc.Text(), "::")
+		key := strings.TrimSpace(word[0])
+		value := strings.TrimSpace(word[1])
+		dict[key] = value
+	}
+
+	t := &Translator{lang: lang, dict: dict}
+	return t, nil
 }
 
 func (c *Client) run() {
@@ -141,8 +185,8 @@ func (c *Client) run() {
 	// Ask to choose language
 	choice_lang := Choice{options: []int{1, 2}}
 	fmt.Printf("Choose client language:\n%s\n", "(1) English (2) Swedish")
-	choice_lang.getInput(c, "Choose: >> ")
-	setLanguage(choice_lang.userInput-1)
+	choice_lang.getInput(c, prompt)
+	c.setLanguage(choice_lang.userInput-1)
 
 	// Request welcome message, (max 80 bytes)
 	resp := make([]byte, 1000)
@@ -170,6 +214,6 @@ func (c *Client) run() {
 
 	// Prompt user for input
 	choice := Choice{options: []int{1,2,3,4}}
-	choice.getInput(c, "Choose: >> ")
+	choice.getInput(c, prompt)
 	fmt.Printf("C: %d\n", choice.userInput) // dbg
 }

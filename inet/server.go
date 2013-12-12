@@ -103,6 +103,7 @@ func (c *ClientConn) processRequest(req []byte) error {
 
 		// Load welcome message in given language
 		message, err := os.Open("files/"+lang+"/welcome_message.txt")
+		defer message.Close()
 		if err != nil {
 			return fmt.Errorf("Could not load welcome message: %s", err)
 		}
