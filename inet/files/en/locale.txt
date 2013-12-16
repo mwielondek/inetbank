@@ -1,3 +1,6 @@
 choose :: choose
 password :: password
 username :: username
+your balance :: your balance is
+enter amount :: enter amount
+enter code :: enter your one-time code

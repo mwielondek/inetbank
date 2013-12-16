@@ -38,21 +38,59 @@ func main() {
 // ================== MENU OPTIONS ==================
 
 // placeholder function
-func void() {}
+func void(c *Client) {}
 
-func exit() {
+func exit(c *Client) {
 	os.Exit(0)
 }
 
-func balance() {}
+func balance(c *Client) {
+	resp := make([]byte, 10)
+	c.conn.Write([]byte("get_blnce"))
+	c.conn.Read(resp)
+	balance, _ := c.processResponse(resp)
+	fmt.Printf("%s: %s\n", Capitalize(c.lang.translate("your balance")),balance)
+}
 
-func withdraw() {}
+// Withdraw cash. User must authenticate the request
+// with a one-time code which is checked against the
+// db.
+func withdraw(c *Client) {
+	resp := []byte{0}
+	var msg string
+	var err error
+	c.conn.Write([]byte("withdraw"))
+	for resp[0] != 1 {
+		resp = make([]byte, 30)
+		c.conn.Read(resp)
+		msg, err = c.processResponse(resp)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+	}
+	fmt.Println(msg)
+}
 
-func deposit() {}
+func deposit(c *Client) {
+	resp := []byte{0}
+	var msg string
+	var err error
+	c.conn.Write([]byte("deposit"))
+	for resp[0] != 1 {
+		resp = make([]byte, 30)
+		c.conn.Read(resp)
+		msg, err = c.processResponse(resp)
+		if err != nil {
+			fmt.Println(err)
+		}
+	}
+	fmt.Println(msg)
+}
 
 
 // ===================== CHOICE =====================
-type MenuFunc func()
+type MenuFunc func(c *Client)
 type Choice struct {
 	userInput int
 	funcs []MenuFunc
@@ -85,8 +123,8 @@ func (c *Choice) validateInput(i int) bool {
 }
 
 // executes function with index userInput-1 from funcs-array
-func (c *Choice) exec() {
-	c.funcs[c.userInput-1]()
+func (c *Choice) exec(cl *Client) {
+	c.funcs[c.userInput-1](cl)
 }
 
 // ================== TRANSLATOR ==================
@@ -174,6 +212,27 @@ func (c *Client) processResponse(res []byte) (string, error) {
 		case "get_passw":
 			c.conn.Write([]byte(password))
 			return "", nil
+		case "get_amnt":
+			var amount_int int
+			var amount string
+			for amount_int <= 0 {
+				fmt.Print(Capitalize(c.lang.translate("enter amount"))+": ")
+				amount, _ = c.reader.ReadString('\n')
+				amount = amount[:len(amount)-1] // remove LF
+				amount_int, _ = strconv.Atoi(amount)
+				if amount_int <= 0 {
+					fmt.Println("Amount must be positive")
+				}
+			}
+			c.conn.Write([]byte(amount))
+			return "", nil
+		case "authcode":
+			fmt.Print(Capitalize(c.lang.translate("enter code"))+": ")
+			var code string
+			code, _ = c.reader.ReadString('\n')
+			code = code[:len(code)-1]
+			c.conn.Write([]byte(code))
+			return "", nil
 		default:
 			return "", fmt.Errorf("Bad request from server: %s", req)
 		}
@@ -260,10 +319,11 @@ func (c *Client) run() {
 		fmt.Printf("Could not load menu. %s\n", err)
 		os.Exit(1)
 	}
+	dashes := strings.Repeat("-", 50)
 	for {
-		fmt.Println(menu)
+		fmt.Printf("\n%s\n%s\n%s\n", dashes, menu, dashes)
 		// Prompt user for input
 		choice.getInput(c, prompt)
-		choice.exec()
+		choice.exec(c)
 	}
 }

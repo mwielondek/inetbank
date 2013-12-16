@@ -7,6 +7,7 @@ import (
 	"time"
 	"bytes"
 	"os"
+	"strconv"
 	"bufio"
 	"database/sql"
 	_ "github.com/mattn/go-sqlite3" // sqlite3 driver
@@ -15,7 +16,7 @@ import (
 
 const (
 	port = "1337"
-	timeout = 30 // in seconds
+	timeout = 300 // in seconds
 
 	// Control bits
 	Failure = 0
@@ -31,6 +32,7 @@ var (
 
 type ClientConn struct {
 	conn net.Conn
+	user_id string
 }
 
 func connectToDatabase(filename string) (db *sql.DB) {
@@ -199,20 +201,72 @@ func (c *ClientConn) processRequest(req []byte) error {
 		c.conn.Write(CreateResponse("get_passw", Request))
 		c.conn.Read(password)
 
-		var pin string
-		err := db.QueryRow("SELECT pin FROM users WHERE cardnr = ?", BytesToString(username)).Scan(&pin)
+		// Check user -> account
+		var user_id, pin string
+		err := db.QueryRow("SELECT id FROM users WHERE cardnr = ?", BytesToString(username)).Scan(&user_id)
 		if err != nil && err == sql.ErrNoRows {
 			c.conn.Write(CreateResponse("No matching account found", Failure))
 			break
 		}
-		
+		c.user_id = user_id
+
+		// Check user PIN
+		db.QueryRow("SELECT pin FROM users WHERE id = ?", user_id).Scan(&pin)
 		if pin == BytesToString(password) {
+			// c.user_id = 
 			c.conn.Write(CreateResponse("Authenticated", Success))
 		} else {
 			c.conn.Write(CreateResponse("Wrong PIN", Failure))
 		}
+	case "get_blnce":
+		balance := c.get_balance()
+		c.conn.Write(CreateResponse(strconv.Itoa(balance), Success))
+	case "withdraw":
+		// user must authenticate with a one-time code
+		c.conn.Write(CreateResponse("authcode", Request))
+		resp := make([]byte, 10)
+		c.conn.Read(resp)
+
+		res, _ := db.Exec("DELETE FROM codes WHERE ownerid = ? AND code = ?", c.user_id, BytesToString(resp))
+		if ra, _ := res.RowsAffected(); ra != 1 {
+			c.conn.Write(CreateResponse("Wrong code", Failure))
+		} else {
+			c.money_op("withdraw")
+		}
+	case "deposit":
+		c.money_op("deposit")
 	default:
 		return fmt.Errorf("Request fallthrough (bad request: %s)", sreq)
 	}
 	return nil
+}
+
+func (c *ClientConn) get_balance() int {
+	var balance string
+	db.QueryRow("SELECT balance FROM users WHERE id = ?", c.user_id).Scan(&balance)
+	i, _ := strconv.Atoi(balance)
+	return i
+}
+
+func (c *ClientConn) money_op(op string) {
+	amount := make([]byte, 10)
+	c.conn.Write(CreateResponse("get_amnt", Request))
+	c.conn.Read(amount)
+	new_balance, _ := strconv.Atoi(BytesToString(amount))
+	switch op {
+	case "withdraw":
+		if new_balance > c.get_balance() {
+			c.conn.Write(CreateResponse("Insufficient funds", Failure))
+			return
+		} 
+		new_balance = c.get_balance() - new_balance
+	case "deposit":
+		new_balance += c.get_balance()
+	}
+	err := dbexec(db, fmt.Sprintf("UPDATE users SET balance = %d WHERE id = %s", new_balance, c.user_id))
+	if err != nil {
+		c.conn.Write(CreateResponse("Updating balance failed", Failure))
+	} else {
+		c.conn.Write(CreateResponse("Balance updated", Success))
+	}	
 }
