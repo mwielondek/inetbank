@@ -1,1 +1,6 @@
 choose :: välj
+password :: lösenord
+username :: användarnamn
+your balance :: ditt saldo är
+enter amount :: skriv in summa
+enter code :: skriv in din engångskod

@@ -1,0 +1,6 @@
+TODO:
+
+ * Specify ip,port as sys.argv server/client
+ * Add 'Welcome %name' - message => add name field to db
+ * Use a buffer?
+ * Translate server messages

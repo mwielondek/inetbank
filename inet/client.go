@@ -324,6 +324,7 @@ func (c *Client) run() {
 		fmt.Printf("\n%s\n%s\n%s\n", dashes, menu, dashes)
 		// Prompt user for input
 		choice.getInput(c, prompt)
+		// Execute chosen function
 		choice.exec(c)
 	}
 }
