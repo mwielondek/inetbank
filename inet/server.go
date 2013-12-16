@@ -25,6 +25,10 @@ const (
 	db_filename = "./db.sqlite3"
 )
 
+var (
+	db *sql.DB
+)
+
 type ClientConn struct {
 	conn net.Conn
 }
@@ -48,8 +52,8 @@ func initDatabase(db *sql.DB) error {
 		return err
 	}
 
-	query = "CREATE TABLE users(id INTEGER PRIMARY KEY ASC AUTOINCREMENT, username STRING, "
-	query += "password STRING, balance INTEGER);"
+	query = "CREATE TABLE users(id INTEGER PRIMARY KEY ASC AUTOINCREMENT, cardnr STRING, "
+	query += "pin INTEGER, balance INTEGER);"
 	err = dbexec(db, query)
 	if err != nil {
 		return err
@@ -67,7 +71,6 @@ func dbexec(db *sql.DB, query string) error {
 
 func main() {
 	// ============================= DATABASE =============================
-	var db *sql.DB
 	defer db.Close()
 	// check if db exists
 	if _, err := os.Stat(db_filename); os.IsNotExist(err) {
@@ -121,11 +124,13 @@ func main() {
 			c := cl.conn
 			defer c.Close()
 
-			// create request buffer, max 10 bytes
-			request := make([]byte, 10)
+			var request []byte
 			for {
 				// set idle timeout
 				c.SetDeadline(time.Now().Add(timeout*time.Second))
+
+				// create/clear request buffer, max 10 bytes
+				request = make([]byte, 10)
 
 				// read
 				_, err := c.Read(request)
@@ -181,6 +186,31 @@ func (c *ClientConn) processRequest(req []byte) error {
 		resp = []byte(welcome_message)
 		resp = bytes.Join([][]byte{{Success},resp}, []byte{})
 		c.conn.Write(resp)
+	case "login":
+		// The size of username should be 20 chars and password only 4.
+		// The size is left intentionally much bigger to protect from
+		// buffer overflows. However, this should be changed, either
+		// through use of a buffer or using some other assertion logic.
+		username, password := make([]byte, 256), make([]byte, 256)
+		
+		// get credentials
+		c.conn.Write(CreateResponse("get_user", Request))
+		c.conn.Read(username)
+		c.conn.Write(CreateResponse("get_passw", Request))
+		c.conn.Read(password)
+
+		var pin string
+		err := db.QueryRow("SELECT pin FROM users WHERE cardnr = ?", BytesToString(username)).Scan(&pin)
+		if err != nil && err == sql.ErrNoRows {
+			c.conn.Write(CreateResponse("No matching account found", Failure))
+			break
+		}
+		
+		if pin == BytesToString(password) {
+			c.conn.Write(CreateResponse("Authenticated", Success))
+		} else {
+			c.conn.Write(CreateResponse("Wrong PIN", Failure))
+		}
 	default:
 		return fmt.Errorf("Request fallthrough (bad request: %s)", sreq)
 	}

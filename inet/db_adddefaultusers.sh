@@ -4,9 +4,9 @@ db="db.sqlite3"
 
 # Add users
 
-sqlite3 $db 'INSERT INTO users VALUES (1, "Milosz", "password123", 1000);'
-sqlite3 $db 'INSERT INTO users VALUES (2, "Alice", "secret123", 1000);'
-sqlite3 $db 'INSERT INTO users VALUES (3, "Bob", "ilovecats", 1000);'
+sqlite3 $db 'INSERT INTO users VALUES (1, "0001", 0000, 1000);'
+sqlite3 $db 'INSERT INTO users VALUES (2, "1234432143211234", 4321, 1000);'
+sqlite3 $db 'INSERT INTO users VALUES (3, "1000200030004000", 1234, 1000);'
 
 # Add codes (odd numbers 1..99)
 

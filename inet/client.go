@@ -24,6 +24,8 @@ const (
 var (
 	lang = "en" //default lang
 	prompt = "Choose"+prompt_suffix // default prompt
+	username string // card nr
+	password string // pin code
 )
 
 func main() {
@@ -166,8 +168,14 @@ func (c *Client) processResponse(res []byte) (string, error) {
 		case "get_lang":
 			c.conn.Write([]byte(lang))
 			return "", nil
+		case "get_user":
+			c.conn.Write([]byte(username))
+			return "", nil
+		case "get_passw":
+			c.conn.Write([]byte(password))
+			return "", nil
 		default:
-			return "", fmt.Errorf("Bad request from server: %s", string(req))
+			return "", fmt.Errorf("Bad request from server: %s", req)
 		}
 	}
 	if res[0] == Success {
@@ -200,7 +208,7 @@ func (c *Client) run() {
 	c.setLanguage(choice_lang.userInput-1)
 
 	// Request welcome message, (max 80 bytes)
-	resp := make([]byte, 1000)
+	resp := make([]byte, 256)
 	c.conn.Write([]byte("get_wmsg"))
 	var wmsg_str string
 	var err error
@@ -214,6 +222,35 @@ func (c *Client) run() {
 	}
 	fmt.Println(wmsg_str)
 
+	// Login loop
+	for {
+		// Login (username = card nr, password = pin code)
+		fmt.Printf("%s: ", Capitalize(c.lang.translate("username"))) 	// prompt
+		username, _ = c.reader.ReadString('\n')							// read input
+		username = username[:len(username)-1]							// remove trailing LF
+		fmt.Printf("%s: ", Capitalize(c.lang.translate("password")))
+		password, _ = c.reader.ReadString('\n')
+		password = password[:len(password)-1]
+
+		// send credentials to server
+		c.conn.Write([]byte("login"))
+		resp = make([]byte, 80) // clear resp
+		var success_msg string
+		for resp[0] != Success {
+			resp = make([]byte, 80)
+			c.conn.Read(resp)
+			success_msg, err = c.processResponse(resp)
+			if err != nil {
+				fmt.Println(err)
+				break
+			}
+		}
+
+		if success_msg != "" {
+			fmt.Println(success_msg)
+			break
+		}
+	}
 
 	// Print menu
 	menufuncs := []MenuFunc{balance, withdraw, deposit, exit}
